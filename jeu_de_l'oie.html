@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GooseTerm // Le Jardin des Oies (Édition Terminal)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-deep: #050F05;
+            --green-shadow: #0D2B0D;
+            --green-mid: #1E6B1E;
+            --green-bright: #38D838;
+            --green-glow: #A8FFA8;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        input, select {
+            user-select: text;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--green-bright);
+            font-family: "Courier New", Courier, monospace;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* Effet Scanlines CRT subtil */
+        .crt-overlay {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.28) 50%
+            );
+            background-size: 100% 4px;
+            z-index: 50;
+        }
+
+        /* Panneaux esthétique Terminal / Carte Mère */
+        .retro-panel {
+            background-color: #071607;
+            border: 1px solid var(--green-mid);
+            box-shadow: 0 0 12px rgba(30, 107, 30, 0.2), inset 0 0 8px rgba(5, 15, 5, 0.8);
+        }
+
+        .retro-panel-bright {
+            background-color: #081A08;
+            border: 1px solid var(--green-bright);
+            box-shadow: 0 0 15px rgba(56, 216, 56, 0.2), inset 0 0 10px rgba(5, 15, 5, 0.85);
+        }
+
+        /* Boutons d'action rétro */
+        .retro-btn {
+            background: linear-gradient(180deg, #154915 0%, #0B290B 100%);
+            color: var(--green-glow);
+            border: 2px solid var(--green-bright);
+            box-shadow: 0 4px 0 #071C07, 0 0 12px rgba(56, 216, 56, 0.35);
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
+            cursor: pointer;
+        }
+
+        .retro-btn:hover:not(:disabled) {
+            filter: brightness(1.2);
+            box-shadow: 0 4px 0 #071C07, 0 0 18px rgba(168, 255, 168, 0.55);
+        }
+
+        .retro-btn:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #071C07, 0 0 10px rgba(56, 216, 56, 0.4);
+        }
+
+        .retro-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            filter: grayscale(0.4);
+        }
+
+        .retro-btn-secondary {
+            background-color: #091E09;
+            color: var(--green-bright);
+            border: 1px solid var(--green-mid);
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .retro-btn-secondary:hover {
+            border-color: var(--green-bright);
+            color: var(--green-glow);
+            background-color: #0F300F;
+        }
+
+        /* Sliders Audio Rétro */
+        input[type="range"].retro-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #050F05;
+            border: 1px solid var(--green-mid);
+            border-radius: 4px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"].retro-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--green-bright);
+            border: 2px solid var(--green-glow);
+            box-shadow: 0 0 6px var(--green-bright);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        input[type="range"].retro-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--green-bright);
+            border: 2px solid var(--green-glow);
+            box-shadow: 0 0 6px var(--green-bright);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 4px 0 #071C07, 0 0 10px rgba(56, 216, 56, 0.3); }
+            50% { box-shadow: 0 4px 0 #071C07, 0 0 22px rgba(168, 255, 168, 0.65); }
+        }
+
+        .btn-pulse:not(:disabled) {
+            animation: pulseGlow 2s infinite;
+        }
+
+        /* Rendu Pixel-Art strict sur les Canvas */
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* Scrollbars personnalisées */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050F05;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1E6B1E;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #38D838;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col justify-between p-2 sm:p-4">
+    <div class="crt-overlay"></div>
+
+    <div class="max-w-[1400px] w-full mx-auto flex flex-col gap-3 z-10">
+        <!-- En-tête Terminal -->
+        <header class="retro-panel rounded-lg px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <div class="w-3 h-3 rounded-full bg-[#38D838] shadow-[0_0_8px_#38D838] animate-pulse"></div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-base sm:text-lg font-extrabold tracking-wider text-[#A8FFA8]">
+                            GOOSETERM // LE JARDIN DES OIES
+                        </h1>
+                        <span class="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded bg-[#0D2B0D] border border-[#1E6B1E] text-[#38D838] font-bold">
+                            63 CASES · 2D6
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-[#38D838] opacity-85">
+                        Parcours en spirale fidèle · Le joueur humain actif joue le pion <strong class="text-[#FF4455]">ROUGE</strong> contre les pions <strong class="text-white">BLANCS</strong>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Contrôles Système & Audio -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button id="btnOpenConfig" class="retro-btn-secondary px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1.5">
+                    <span>[⚙] JOUEURS</span>
+                </button>
+                <button id="btnOpenSynth" class="retro-btn-secondary px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1.5">
+                    <span>[♪] AUDIO / SYNTH</span>
+                </button>
+                <button id="btnToggleMute" class="retro-btn-secondary px-2.5 py-1.5 rounded text-xs font-bold">
+                    [🔊 AUDIO: ON]
+                </button>
+                <button id="btnResetGame" class="retro-btn-secondary px-2.5 py-1.5 rounded text-xs font-bold text-[#FF9E7D] border-[#9A3412] hover:border-[#FF6B35]">
+                    [↻] RESET
+                </button>
+            </div>
+        </header>
+
+        <!-- Grille Principale : Plateau à gauche (8 col) + Panneau de contrôle & Infos Cases à droite (4 col) -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+            
+            <!-- Zone Gauche : Plateau de Jeu en Spirale (8 colonnes sur Desktop) -->
+            <section class="lg:col-span-8 flex flex-col gap-2">
+                <div class="retro-panel-bright rounded-lg p-2 sm:p-3">
+                    <!-- Barre d'état supérieure du plateau -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2 px-2 py-1.5 bg-[#050F05] border border-[#1E6B1E] rounded text-xs">
+                        <div class="flex items-center gap-3">
+                            <span class="text-[#38D838] font-bold">
+                                TOUR : <strong id="uiTurnCounter" class="text-[#A8FFA8]">01</strong>
+                            </span>
+                            <span class="text-[#1E6B1E]">|</span>
+                            <span class="text-[#38D838] font-bold">
+                                JOUEUR ACTIF : <strong id="uiActivePlayerName" class="text-[#FF4455]">VOUS (P1)</strong>
+                            </span>
+                        </div>
+                        <div id="uiTileTooltip" class="text-[11px] text-[#A8FFA8] truncate max-w-full sm:max-w-[380px]">
+                            Survolez ou touchez une case pour inspecter ses spécificités
+                        </div>
+                    </div>
+
+                    <!-- Canvas principal en basse résolution native upscalée (760x540) -->
+                    <div class="relative w-full overflow-hidden rounded border border-[#1E6B1E] bg-[#050F05]">
+                        <canvas id="gameCanvas" width="760" height="540"></canvas>
+                    </div>
+
+                    <!-- Légende rapide des pions et du sens de parcours sous le plateau -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 mt-2 px-2 py-1.5 bg-[#050F05] border border-[#1E6B1E] rounded text-xs">
+                        <div class="flex flex-wrap items-center gap-4">
+                            <span class="flex items-center gap-1.5 font-bold text-[#FF4455]">
+                                <span class="inline-block w-3 h-3 rounded-sm bg-[#FF3344] border border-[#FFD1D6]"></span>
+                                JOUEUR ACTUEL (HUMAIN - ROUGE)
+                            </span>
+                            <span class="flex items-center gap-1.5 font-bold text-white">
+                                <span class="inline-block w-3 h-3 rounded-sm bg-white border border-gray-400"></span>
+                                AUTRES JOUEURS & BOTS (BLANC)
+                            </span>
+                        </div>
+                        <div class="text-[11px] text-[#A8FFA8]">
+                            ↱ <strong class="text-[#FF7744]">DÉPART (Bas-Gauche)</strong> : Suivez les connecteurs de 1 jusqu'au cœur (Case 63)
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Zone Droite : Contrôle des Dés, Statut des 4 Joueurs, Boîte d'Info Cases Spéciales et Journal (4 colonnes sur Desktop) -->
+            <aside class="lg:col-span-4 flex flex-col gap-3">
+                
+                <!-- Module Lancer de Dés & Action -->
+                <div class="retro-panel-bright rounded-lg p-3 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between border-b border-[#1E6B1E] pb-1.5">
+                        <span class="text-xs font-bold tracking-wider text-[#A8FFA8]">GÉNÉRATEUR ALÉATOIRE // 2D6</span>
+                        <span id="uiGameStateBadge" class="text-[11px] px-2 py-0.5 rounded bg-[#1E6B1E] text-[#A8FFA8] font-bold">
+                            PRÊT
+                        </span>
+                    </div>
+
+                    <!-- Affichage Canvas des 2 Dés 3D Pixel + Somme -->
+                    <div class="flex items-center justify-around bg-[#050F05] border border-[#1E6B1E] rounded-lg p-2">
+                        <canvas id="diceCanvas" width="150" height="60" class="w-[150px] h-[60px]"></canvas>
+                        <div class="text-right">
+                            <div class="text-[10px] text-[#38D838] font-bold uppercase">REGISTRE DÉS</div>
+                            <div id="uiDiceSum" class="text-2xl sm:text-3xl font-extrabold text-[#A8FFA8]">09</div>
+                            <div id="uiDiceDetail" class="text-xs text-[#38D838]">En attente...</div>
+                        </div>
+                    </div>
+
+                    <!-- Bouton Principal Lancer les Dés -->
+                    <button id="btnRollDice" class="retro-btn btn-pulse w-full py-2.5 px-4 rounded-lg text-sm sm:text-base flex items-center justify-center gap-2">
+                        <span>► LANCER LES DÉS (ESPACE)</span>
+                    </button>
+                </div>
+
+                <!-- Liste des Processus / Joueurs -->
+                <div class="retro-panel rounded-lg p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between border-b border-[#1E6B1E] pb-1.5">
+                        <span class="text-xs font-bold tracking-wider text-[#A8FFA8]">JOUEURS EN COURSE</span>
+                        <span class="text-[10px] text-[#38D838] font-bold">CIBLE : CASE 63</span>
+                    </div>
+                    <div id="playersListContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
+                        <!-- Rempli dynamiquement par JS -->
+                    </div>
+                </div>
+
+                <!-- Boîte d'info interactive des Cases Spéciales -->
+                <div class="retro-panel-bright rounded-lg p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between border-b border-[#1E6B1E] pb-1.5">
+                        <span class="text-xs font-bold tracking-wider text-[#A8FFA8]">SPÉCIFICITÉS DES CASES SPÉCIALES</span>
+                        <span class="text-[10px] text-[#38D838]">Survolez pour localiser</span>
+                    </div>
+
+                    <!-- Détail dynamique de la case sélectionnée / survolée -->
+                    <div id="specialInfoFocusBox" class="bg-[#050F05] border border-[#38D838] rounded p-2 text-xs">
+                        <div class="flex items-center justify-between gap-2">
+                            <span id="focusTileTitle" class="font-bold text-[#A8FFA8] truncate">APERÇU DU PLATEAU</span>
+                            <span id="focusTileNumbers" class="text-[10px] px-1.5 py-0.5 rounded bg-[#0D2B0D] border border-[#1E6B1E] text-[#38D838] font-bold shrink-0">63 CASES</span>
+                        </div>
+                        <p id="focusTileDesc" class="text-[11px] text-[#38D838] mt-1 leading-snug">
+                            Cliquez ou survolez une catégorie ci-dessous (ou une case du plateau) pour illuminer ses emplacements et voir son effet.
+                        </p>
+                    </div>
+
+                    <!-- Liste colorée de toutes les cases spéciales -->
+                    <div id="specialTilesInfoList" class="grid grid-cols-1 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                        <!-- Généré dynamiquement par JS avec couleurs et effets -->
+                    </div>
+                </div>
+
+                <!-- Journal d'événements système -->
+                <div class="retro-panel rounded-lg p-3 flex flex-col gap-2 flex-1">
+                    <div class="flex items-center justify-between border-b border-[#1E6B1E] pb-1.5">
+                        <span class="text-xs font-bold tracking-wider text-[#A8FFA8]">JOURNAL DE PARTIE</span>
+                        <button id="btnClearLog" class="text-[10px] text-[#38D838] hover:text-[#A8FFA8] uppercase font-bold">
+                            [VIDER]
+                        </button>
+                    </div>
+                    <div id="sysLogContainer" class="bg-[#050F05] border border-[#1E6B1E] rounded p-2 h-32 overflow-y-auto font-mono text-xs space-y-1.5">
+                        <!-- Logs générés dynamiquement -->
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- MODALE : Configuration des Joueurs -->
+    <div id="modalConfig" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50">
+        <div class="retro-panel-bright rounded-lg max-w-md w-full p-4 flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-[#1E6B1E] pb-2">
+                <h2 class="text-sm font-extrabold text-[#A8FFA8]">[⚙] CONFIGURATION DES JOUEURS (LOCAL & BOTS)</h2>
+                <button id="btnCloseConfig" class="text-xs text-[#38D838] hover:text-[#A8FFA8] font-bold">[X]</button>
+            </div>
+            <p class="text-xs text-[#38D838]">
+                Modifiez les pseudos et choisissez le contrôle (<strong class="text-[#A8FFA8]">Humain</strong> en multijoueur local, <strong class="text-[#A8FFA8]">Bot</strong> ou <strong class="text-[#A8FFA8]">Désactivé</strong>). Le joueur humain dont c'est le tour s'affiche automatiquement en <strong class="text-[#FF4455]">ROUGE</strong> :
+            </p>
+            <div id="configPlayersForm" class="flex flex-col gap-2">
+                <!-- Généré par JS -->
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t border-[#1E6B1E]">
+                <button id="btnCancelConfig" class="retro-btn-secondary px-3 py-2 rounded text-xs font-bold">
+                    ANNULER
+                </button>
+                <button id="btnApplyConfig" class="retro-btn px-4 py-2 rounded text-xs">
+                    APPLIQUER & RELANCER LA PARTIE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE : Menu Audio (Volumes Musique & SFX) + Synthétiseur 8-Bit -->
+    <div id="modalSynth" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50">
+        <div class="retro-panel-bright rounded-lg max-w-md w-full p-4 flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-[#1E6B1E] pb-2">
+                <h2 class="text-sm font-extrabold text-[#A8FFA8]">[♪] MIXAGE AUDIO & SYNTHÉTISEUR 8-BIT</h2>
+                <button id="btnCloseSynth" class="text-xs text-[#38D838] hover:text-[#A8FFA8] font-bold">[X]</button>
+            </div>
+
+            <!-- Contrôle du Volume de la Musique & des SFX -->
+            <div class="bg-[#050F05] border border-[#1E6B1E] rounded p-3 flex flex-col gap-3">
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-[#A8FFA8]">🎵 VOLUME MUSIQUE (BGM)</span>
+                        <span id="uiMusicVolVal" class="font-mono font-bold text-[#38D838]">100%</span>
+                    </div>
+                    <input id="sliderMusicVol" type="range" min="0" max="200" value="100" class="retro-slider">
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-[#A8FFA8]">🔊 VOLUME EFFETS SONORES (SFX)</span>
+                        <span id="uiSfxVolVal" class="font-mono font-bold text-[#38D838]">100%</span>
+                    </div>
+                    <input id="sliderSfxVol" type="range" min="0" max="200" value="100" class="retro-slider">
+                </div>
+            </div>
+
+            <p class="text-xs text-[#38D838]">
+                Testez les bruitages générés en temps réel par la Web Audio API :
+            </p>
+            <div class="grid grid-cols-2 gap-2">
+                <button data-sfx="roll" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">🎲 Roulis de Dés</button>
+                <button data-sfx="jump" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">🦘 Saut Pion (Mario)</button>
+                <button data-sfx="land" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">📍 Atterrissage</button>
+                <button data-sfx="overclock" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">🦆 L'Oie / Bonus (Sonic)</button>
+                <button data-sfx="bypass" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">🌉 Le Pont (Warp)</button>
+                <button data-sfx="trap" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">⚠️ Piège (Auberge/Laby)</button>
+                <button data-sfx="purge" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">💀 Tête de Mort (Reset)</button>
+                <button data-sfx="victory" class="retro-btn-secondary p-2 rounded text-xs font-bold text-left">🏆 Victoire Case 63</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE : Écran de Victoire (Harmonisé avec l'UI Terminal du jeu) -->
+    <div id="modalVictory" class="fixed inset-0 bg-black/85 hidden items-center justify-center p-4 z-50">
+        <div class="retro-panel-bright rounded-lg max-w-md w-full p-5 text-center flex flex-col items-center gap-3">
+            <div class="text-xs font-bold px-2.5 py-0.5 rounded bg-[#0D2B0D] text-[#A8FFA8] border border-[#38D838]">
+                CASE 63 ATTEINTE // JARDIN DE L'OIE
+            </div>
+            <h2 id="victoryTitle" class="text-xl sm:text-2xl font-extrabold text-[#A8FFA8]">
+                VICTOIRE !
+            </h2>
+            <p id="victorySubtitle" class="text-xs text-[#38D838] leading-relaxed">
+                Le pion a atteint le cœur du jardin (case 63) avec le compte exact !
+            </p>
+            <button id="btnVictoryReplay" class="retro-btn w-full py-2.5 px-4 rounded-lg text-sm mt-2">
+                ► REJOUER UNE PARTIE
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. CONFIG : CONSTANTES, PALETTE COULEURS RÉTRO & CASES SPÉCIALES
+         * ============================================================================
+         */
+        const CONFIG = {
+            CANVAS_W: 760,
+            CANVAS_H: 540,
+            COLORS: {
+                BG: '#050F05',
+                SHADOW: '#0D2B0D',
+                MID: '#1E6B1E',
+                BRIGHT: '#38D838',
+                GLOW: '#A8FFA8',
+                DARK_LINE: '#091D09'
+            },
+            THEMES: {
+                START: {
+                    bg: '#331409', edge: '#9A3412', border: '#FF6B35', text: '#FF9E7D', badgeBg: '#431407'
+                },
+                OVC: {
+                    bg: '#0B3B1E', edge: '#15803D', border: '#4ADE80', text: '#BBF7D0', badgeBg: '#052E16'
+                },
+                BLUE: {
+                    bg: '#082F49', edge: '#0369A1', border: '#38BDF8', text: '#BAE6FD', badgeBg: '#0C4A6E'
+                },
+                YELLOW: {
+                    bg: '#3B2A06', edge: '#A16207', border: '#FACC15', text: '#FEF08A', badgeBg: '#422006'
+                },
+                PURPLE: {
+                    bg: '#2E1045', edge: '#7E22CE', border: '#C084FC', text: '#F3E8FF', badgeBg: '#3B0764'
+                },
+                RED: {
+                    bg: '#450A0F', edge: '#B91C1C', border: '#F87171', text: '#FECACA', badgeBg: '#450A0A'
+                },
+                GOLD: {
+                    bg: '#4A2C04', edge: '#D97706', border: '#FBBF24', text: '#FEF3C7', badgeBg: '#451A03'
+                },
+                NORMAL: {
+                    bg: '#081C08', edge: '#144214', border: '#2E8B2E', text: '#68E868', badgeBg: '#051205'
+                }
+            },
+            SPECIAL_CATALOG: [
+                {
+                    key: 'OVC',
+                    title: 'L\'OIE // OVERCLOCK',
+                    code: 'OIE',
+                    cases: [5, 9, 14, 18, 23, 27, 32, 36, 41, 45, 50, 54, 59],
+                    theme: 'OVC',
+                    sprite: 'GOOSE',
+                    shortRule: 'x2 Dés (Rebondit)',
+                    desc: 'Case de l\'Oie : votre pion rebondit et avance une seconde fois du montant exact de vos dés !'
+                },
+                {
+                    key: 'BPX',
+                    title: 'LE PONT // BYPASS',
+                    code: 'PONT',
+                    cases: [6],
+                    theme: 'BLUE',
+                    sprite: 'BYPASS',
+                    shortRule: 'Case 6 → Case 12',
+                    desc: 'Raccourci matériel : atterrir sur la case 6 vous propulse immédiatement à la case 12.'
+                },
+                {
+                    key: 'SLP',
+                    title: 'AUBERGE // SLEEP',
+                    code: 'HOTEL',
+                    cases: [19],
+                    theme: 'YELLOW',
+                    sprite: 'SLEEP',
+                    shortRule: 'Passe 2 tours',
+                    desc: 'Halte forcée à l\'auberge (case 19) : votre pion se repose et passe ses 2 prochains tours.'
+                },
+                {
+                    key: 'DLK',
+                    title: 'LE PUITS // DEADLOCK',
+                    code: 'PUITS',
+                    cases: [31],
+                    theme: 'BLUE',
+                    sprite: 'DEADLOCK',
+                    shortRule: 'Bloqué (Attente)',
+                    desc: 'Tombé au fond du puits (case 31) : bloqué jusqu\'à ce qu\'un autre joueur tombe sur cette case et prenne votre place.'
+                },
+                {
+                    key: 'MEM',
+                    title: 'LABYRINTHE // ERREUR',
+                    code: 'LABY',
+                    cases: [42],
+                    theme: 'PURPLE',
+                    sprite: 'CORRUPT',
+                    shortRule: 'Case 42 → Case 30',
+                    desc: 'Égaré dans le labyrinthe (case 42) : vous reculez immédiatement jusqu\'à la case 30.'
+                },
+                {
+                    key: 'SBX',
+                    title: 'LA PRISON // SANDBOX',
+                    code: 'PRISON',
+                    cases: [52],
+                    theme: 'PURPLE',
+                    sprite: 'SANDBOX',
+                    shortRule: 'Enfermé (Attente)',
+                    desc: 'Enfermé en prison (case 52) : vous devez attendre qu\'un autre joueur atterrisse ici pour vous libérer et échanger sa place.'
+                },
+                {
+                    key: 'BSOD',
+                    title: 'TÊTE DE MORT // RETOUR',
+                    code: 'MORT',
+                    cases: [58],
+                    theme: 'RED',
+                    sprite: 'PURGE',
+                    shortRule: 'Case 58 → Départ (0)',
+                    desc: 'Fatalité à 5 cases du but ! Retour immédiat à la case Départ (case 0) pour tout recommencer.'
+                },
+                {
+                    key: 'ROOT',
+                    title: 'JARDIN // ARRIVÉE 63',
+                    code: 'WIN',
+                    cases: [63],
+                    theme: 'GOLD',
+                    sprite: 'ROOT',
+                    shortRule: 'Victoire pile à 63',
+                    desc: 'Le cœur du jardin ! Il faut tomber pile sur la case 63 pour gagner (sinon on recule des points en trop).'
+                }
+            ],
+            SPECIAL_TILES: {
+                1:  { code: 'DÉPART', name: 'DÉPART DU PARCOURS', type: 'START',  theme: 'START',  sprite: 'FLAG',     desc: 'Première case du parcours en spirale.' },
+                5:  { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                6:  { code: 'PONT',   name: 'LE PONT (BYPASS)',   type: 'BONUS',  theme: 'BLUE',   sprite: 'BYPASS',   desc: 'Pont : téléporte immédiatement à la case 12.' },
+                9:  { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                14: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                18: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                19: { code: 'HOTEL',  name: 'L\'AUBERGE (SLEEP)', type: 'TRAP',   theme: 'YELLOW', sprite: 'SLEEP',    desc: 'Auberge : passe 2 tours complets.' },
+                23: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                27: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                31: { code: 'PUITS',  name: 'LE PUITS (DEADLOCK)',type: 'LOCK',   theme: 'BLUE',   sprite: 'DEADLOCK', desc: 'Puits : bloqué jusqu’à ce qu’un joueur prenne la place.' },
+                32: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                36: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                41: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                42: { code: 'LABY',   name: 'LE LABYRINTHE',      type: 'TRAP',   theme: 'PURPLE', sprite: 'CORRUPT',  desc: 'Labyrinthe : recule immédiatement à la case 30.' },
+                45: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                50: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                52: { code: 'PRISON', name: 'LA PRISON (SANDBOX)',type: 'LOCK',   theme: 'PURPLE', sprite: 'SANDBOX',  desc: 'Prison : bloqué jusqu’à ce qu’un joueur prenne la place.' },
+                54: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                58: { code: 'RETOUR', name: 'TÊTE DE MORT',       type: 'FATAL',  theme: 'RED',    sprite: 'PURGE',    desc: 'Tête de mort : retour immédiat à la case 0 (Départ).' },
+                59: { code: 'OIE',    name: 'L\'OIE (OVERCLOCK)', type: 'OVC',    theme: 'OVC',    sprite: 'GOOSE',    desc: 'Double le score des dés et avance à nouveau !' },
+                63: { code: 'ARRIVÉE',name: 'JARDIN DE L\'OIE',   type: 'WIN',    theme: 'GOLD',   sprite: 'ROOT',     desc: 'Arrivée : Victoire immédiate !' }
+            },
+            PLAYER_PRESETS: [
+                { id: 0, name: 'VOUS (P1)', role: 'Pion P1', sprite: 'PAWN_CLASSIC', mode: 'HUMAN', accent: '#FFFFFF', secondary: '#CBD5E1' },
+                { id: 1, name: 'BOT_02',    role: 'Pion P2', sprite: 'PAWN_CLASSIC', mode: 'BOT',   accent: '#FFFFFF', secondary: '#CBD5E1' },
+                { id: 2, name: 'BOT_03',    role: 'Pion P3', sprite: 'PAWN_CLASSIC', mode: 'BOT',   accent: '#FFFFFF', secondary: '#CBD5E1' },
+                { id: 3, name: 'BOT_04',    role: 'Pion P4', sprite: 'PAWN_CLASSIC', mode: 'OFF',   accent: '#FFFFFF', secondary: '#CBD5E1' }
+            ]
+        };
+
+        /**
+         * ============================================================================
+         * 2. AUDIO ENGINE : SYNTHÉTISEUR & MUSIQUE 8-BIT CHILL EN FOND
+         * ============================================================================
+         */
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.musicVolume = 1.0; // Multiplicateur 0.0 -> 2.0
+                this.sfxVolume = 1.0;   // Multiplicateur 0.0 -> 2.0
+                this.musicPlaying = false;
+                this.musicTimer = null;
+                // Progression d'accords chill 8-bit (C maj -> A min -> F maj -> G maj)
+                this.chordProgression = [
+                    [261.63, 329.63, 392.00, 523.25], 
+                    [220.00, 261.63, 329.63, 440.00], 
+                    [174.61, 220.00, 261.63, 349.23], 
+                    [196.00, 246.94, 293.66, 392.00]  
+                ];
+                this.chordIdx = 0;
+                this.noteIdx = 0;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        this.ctx = new AudioCtx();
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            setMusicVolume(mult) {
+                this.musicVolume = Math.max(0, Math.min(2, mult));
+                if (this.musicVolume > 0 && !this.muted && !this.musicPlaying) {
+                    this.startBGM();
+                }
+            }
+
+            setSfxVolume(mult) {
+                this.sfxVolume = Math.max(0, Math.min(2, mult));
+            }
+
+            startBGM() {
+                if (this.musicPlaying || this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                this.musicPlaying = true;
+
+                const playNextNote = () => {
+                    if (!this.musicPlaying || this.muted) return;
+                    const chord = this.chordProgression[this.chordIdx];
+                    const freq = chord[this.noteIdx];
+                    
+                    if (this.musicVolume > 0.001) {
+                        this.playTone(freq, 'triangle', 0.4, 0, 0.035 * this.musicVolume, null, true);
+                    }
+
+                    this.noteIdx++;
+                    if (this.noteIdx >= chord.length) {
+                        this.noteIdx = 0;
+                        this.chordIdx = (this.chordIdx + 1) % this.chordProgression.length;
+                    }
+
+                    this.musicTimer = setTimeout(playNextNote, 340);
+                };
+
+                playNextNote();
+            }
+
+            stopBGM() {
+                this.musicPlaying = false;
+                if (this.musicTimer) {
+                    clearTimeout(this.musicTimer);
+                    this.musicTimer = null;
+                }
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                if (this.muted) {
+                    this.stopBGM();
+                } else {
+                    this.startBGM();
+                }
+                return this.muted;
+            }
+
+            playTone(freq, type = 'square', duration = 0.1, startTimeOffset = 0, volume = 0.12, endFreq = null, isMusic = false) {
+                if (this.muted) return;
+                const finalVolume = isMusic ? volume : volume * this.sfxVolume;
+                if (finalVolume <= 0.0005) return;
+
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime + startTimeOffset;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                if (endFreq !== null) {
+                    osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), now + duration);
+                }
+
+                gain.gain.setValueAtTime(finalVolume, now);
+                gain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + duration);
+            }
+
+            playNoise(duration = 0.08, startTimeOffset = 0, volume = 0.1) {
+                if (this.muted) return;
+                const finalVolume = volume * this.sfxVolume;
+                if (finalVolume <= 0.0005) return;
+
+                this.init();
+                if (!this.ctx) return;
+
+                const now = this.ctx.currentTime + startTimeOffset;
+                const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(finalVolume, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+                noise.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+
+            playDiceRoll() {
+                this.startBGM();
+                this.playNoise(0.04, 0, 0.08);
+                this.playTone(300 + Math.random() * 250, 'triangle', 0.04, 0, 0.07);
+            }
+
+            playJump(stepIndex = 0) {
+                this.startBGM();
+                const base = 180 + (stepIndex % 8) * 18;
+                this.playTone(base, 'square', 0.085, 0, 0.1, base * 2.3);
+            }
+
+            playLand() {
+                this.playTone(520, 'triangle', 0.05, 0, 0.1, 260);
+            }
+
+            playOverclock() {
+                const notes = [659.25, 830.61, 987.77, 1318.51];
+                notes.forEach((f, idx) => {
+                    this.playTone(f, 'square', 0.09, idx * 0.055, 0.11);
+                });
+            }
+
+            playBypass() {
+                this.playTone(220, 'sawtooth', 0.18, 0, 0.11, 880);
+                this.playTone(440, 'square', 0.18, 0.12, 0.11, 1320);
+            }
+
+            playTrap() {
+                const freqs = [340, 290, 240, 170];
+                freqs.forEach((f, idx) => {
+                    this.playTone(f, 'sawtooth', 0.11, idx * 0.08, 0.12, f * 0.8);
+                });
+            }
+
+            playPurge() {
+                this.playTone(480, 'sawtooth', 0.35, 0, 0.15, 55);
+                this.playNoise(0.3, 0.15, 0.16);
+            }
+
+            playVictory() {
+                const melody = [
+                    { f: 523.25, d: 0.12, t: 0.00 },
+                    { f: 659.25, d: 0.12, t: 0.13 },
+                    { f: 783.99, d: 0.12, t: 0.26 },
+                    { f: 1046.50, d: 0.28, t: 0.39 },
+                    { f: 783.99, d: 0.12, t: 0.70 },
+                    { f: 1046.50, d: 0.45, t: 0.84 }
+                ];
+                melody.forEach(n => this.playTone(n.f, 'square', n.d, n.t, 0.14));
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 3. SPRITE ENGINE : MATRICES PIXEL ART (PIONS & CASES SPÉCIALES)
+         * ============================================================================
+         */
+        const SPRITES = {
+            PAWN_CLASSIC: [
+                "....3333....",
+                "...311213...",
+                "..31122113..",
+                "..31111113..",
+                "...311113...",
+                "....3113....",
+                "...311113...",
+                "..31111113..",
+                ".3111221113.",
+                "311111111113",
+                "311111111113",
+                ".3333333333."
+            ],
+            FLAG: [
+                "..111111..",
+                "..1122111.",
+                "..11221111",
+                "..111111..",
+                "..11......",
+                "..11......",
+                "..11......",
+                "..11......",
+                ".1111.....",
+                ".........."
+            ],
+            GOOSE: [
+                "......111.",
+                ".....11311",
+                ".....111..",
+                ".....11...",
+                ".1..111...",
+                "1111111...",
+                ".111221...",
+                "..1111....",
+                "...1.1....",
+                ".........."
+            ],
+            BYPASS: [
+                "..........",
+                ".11111111.",
+                "1111111111",
+                "1122..2211",
+                "11......11",
+                "11......11",
+                "11......11",
+                "..........",
+                "2222222222",
+                ".........."
+            ],
+            SLEEP: [
+                "..........",
+                "11........",
+                "11.222....",
+                "11.222..11",
+                "1111111111",
+                "1122222211",
+                "1111111111",
+                "11......11",
+                "11......11",
+                ".........."
+            ],
+            DEADLOCK: [
+                "..........",
+                ".11..11...",
+                "1..11..11.",
+                "..........",
+                ".22..22...",
+                "2..22..22.",
+                "..........",
+                ".11..11...",
+                "1..11..11.",
+                ".........."
+            ],
+            CORRUPT: [
+                ".1111111..",
+                "11.....11.",
+                "11.111111.",
+                "....11....",
+                ".1111111..",
+                ".11....11.",
+                ".11111111.",
+                ".......11.",
+                ".1111111..",
+                ".........."
+            ],
+            SANDBOX: [
+                "...1111...",
+                "..11..11..",
+                "..11..11..",
+                ".11111111.",
+                ".11111111.",
+                ".11133111.",
+                ".11133111.",
+                ".11111111.",
+                ".11111111.",
+                ".........."
+            ],
+            PURGE: [
+                "..111111..",
+                ".11111111.",
+                "1133113311",
+                "1133113311",
+                "1111331111",
+                ".11111111.",
+                "..113131..",
+                "..113131..",
+                "..........",
+                ".........."
+            ],
+            ROOT: [
+                ".11111111.",
+                "1121111211",
+                "11.1111.11",
+                ".11111111.",
+                "..111111..",
+                "....11....",
+                "....11....",
+                "..111111..",
+                ".11111111.",
+                ".........."
+            ]
+        };
+
+        class SpriteRenderer {
+            static draw(ctx, spriteKey, x, y, pixelSize = 2, primaryColor = '#A8FFA8', secondaryColor = '#38D838', outlineColor = '#050F05') {
+                const matrix = SPRITES[spriteKey];
+                if (!matrix) return;
+
+                const rows = matrix.length;
+                const cols = matrix[0].length;
+                const startX = Math.round(x - (cols * pixelSize) / 2);
+                const startY = Math.round(y - (rows * pixelSize) / 2);
+
+                for (let r = 0; r < rows; r++) {
+                    const rowStr = matrix[r];
+                    for (let c = 0; c < cols; c++) {
+                        const ch = rowStr[c];
+                        if (ch === '.') continue;
+                        if (ch === '1') ctx.fillStyle = primaryColor;
+                        else if (ch === '2') ctx.fillStyle = secondaryColor;
+                        else if (ch === '3') ctx.fillStyle = outlineColor;
+                        ctx.fillRect(
+                            startX + c * pixelSize,
+                            startY + r * pixelSize,
+                            pixelSize,
+                            pixelSize
+                        );
+                    }
+                }
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 4. BOARD MANAGER : PLATEAU EN SPIRALE AUTOUR DU JARDIN CENTRAL
+         * ============================================================================
+         */
+        class BoardManager {
+            constructor() {
+                this.tiles = [];
+                this.cols = 11;
+                this.rows = 8;
+                this.tileW = 54;
+                this.tileH = 47;
+                this.gapX = 11;
+                this.gapY = 10;
+                this.offsetX = 28;
+                this.offsetY = 18;
+                this.buildImageShapedBoard();
+            }
+
+            buildImageShapedBoard() {
+                this.tiles = [];
+
+                const pathCoords = [
+                    { col: 0, row: 7 }, { col: 0, row: 6 }, { col: 0, row: 5 }, { col: 0, row: 4 },
+                    { col: 0, row: 3 }, { col: 0, row: 2 }, { col: 0, row: 1 }, { col: 0, row: 0 },
+                    { col: 1, row: 0 }, { col: 2, row: 0 }, { col: 3, row: 0 }, { col: 4, row: 0 },
+                    { col: 5, row: 0 }, { col: 6, row: 0 }, { col: 7, row: 0 }, { col: 8, row: 0 },
+                    { col: 9, row: 0 }, { col: 10, row: 0 }, { col: 10, row: 1 }, { col: 10, row: 2 },
+                    { col: 10, row: 3 }, { col: 10, row: 4 }, { col: 10, row: 5 }, { col: 10, row: 6 },
+                    { col: 10, row: 7 }, { col: 9, row: 7 }, { col: 8, row: 7 }, { col: 7, row: 7 },
+                    { col: 6, row: 7 }, { col: 5, row: 7 }, { col: 4, row: 7 }, { col: 3, row: 7 },
+                    { col: 2, row: 7 }, { col: 1, row: 7 }, { col: 1, row: 6 }, { col: 1, row: 5 },
+                    { col: 1, row: 4 }, { col: 1, row: 3 }, { col: 1, row: 2 }, { col: 1, row: 1 },
+                    { col: 2, row: 1 }, { col: 3, row: 1 }, { col: 4, row: 1 }, { col: 5, row: 1 },
+                    { col: 6, row: 1 }, { col: 7, row: 1 }, { col: 8, row: 1 }, { col: 9, row: 1 },
+                    { col: 9, row: 2 }, { col: 9, row: 3 }, { col: 9, row: 4 }, { col: 9, row: 5 },
+                    { col: 9, row: 6 }, { col: 8, row: 6 }, { col: 7, row: 6 }, { col: 6, row: 6 },
+                    { col: 5, row: 6 }, { col: 4, row: 6 }, { col: 3, row: 6 }, { col: 2, row: 6 },
+                    { col: 2, row: 5 }, { col: 2, row: 4 }, { col: 2, row: 3 }
+                ];
+
+                const tile1Y = this.offsetY + 7 * (this.tileH + this.gapY);
+                this.tiles[0] = {
+                    index: 0,
+                    col: 0,
+                    row: 8,
+                    x: this.offsetX,
+                    y: tile1Y + this.tileH + 10,
+                    w: 118,
+                    h: 34,
+                    code: 'DÉPART',
+                    name: 'ZONE DE DÉPART',
+                    type: 'START',
+                    theme: 'START',
+                    sprite: null,
+                    desc: 'Point de départ hors-plateau (Case 0). Lancez les dés pour entrer sur la case 1 !'
+                };
+
+                for (let i = 0; i < 63; i++) {
+                    const num = i + 1;
+                    const coord = pathCoords[i];
+                    const x = this.offsetX + coord.col * (this.tileW + this.gapX);
+                    const y = this.offsetY + coord.row * (this.tileH + this.gapY);
+                    const spec = CONFIG.SPECIAL_TILES[num] || null;
+
+                    this.tiles[num] = {
+                        index: num,
+                        col: coord.col,
+                        row: coord.row,
+                        x: x,
+                        y: y,
+                        w: this.tileW,
+                        h: this.tileH,
+                        code: spec ? spec.code : null,
+                        name: spec ? spec.name : `CASE ${num}`,
+                        type: spec ? spec.type : 'NORMAL',
+                        theme: spec ? spec.theme : 'NORMAL',
+                        sprite: spec ? spec.sprite : null,
+                        desc: spec ? spec.desc : 'Case normale du parcours.'
+                    };
+                }
+            }
+
+            getTileCenter(tileIndex) {
+                const t = this.tiles[tileIndex] || this.tiles[0];
+                return {
+                    x: Math.round(t.x + t.w / 2),
+                    y: Math.round(t.y + t.h / 2)
+                };
+            }
+
+            getTileAtCanvasPos(cx, cy) {
+                for (let i = 0; i <= 63; i++) {
+                    const t = this.tiles[i];
+                    if (cx >= t.x && cx <= t.x + t.w + 4 && cy >= t.y && cy <= t.y + t.h + 5) {
+                        return t;
+                    }
+                }
+                return null;
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 5. GAME ENGINE : LOGIQUE DU JEU, ANIMATIONS & RENDU 60 FPS
+         * ============================================================================
+         */
+        class GameEngine {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.ctx.imageSmoothingEnabled = false;
+
+                this.diceCanvas = document.getElementById('diceCanvas');
+                this.diceCtx = this.diceCanvas.getContext('2d');
+                this.diceCtx.imageSmoothingEnabled = false;
+
+                this.audio = new AudioEngine();
+                this.board = new BoardManager();
+
+                this.playerConfigs = JSON.parse(JSON.stringify(CONFIG.PLAYER_PRESETS));
+                this.players = [];
+                this.activePlayerIdx = 0;
+                this.turnNumber = 1;
+                this.state = 'STATE_IDLE';
+                this.diceValues = [6, 3];
+
+                this.hoveredTile = null;
+                this.highlightedGroupCases = [];
+                this.highlightTileIdx = null;
+                this.highlightTimer = 0;
+                this.particles = [];
+                this.floatingTexts = [];
+                this.botTimeout = null;
+
+                this.initPlayers();
+                this.populateSpecialInfoBox();
+                this.bindEvents();
+                this.renderDiceCanvas(6, 3, false);
+                this.updateUI();
+                this.logSystem('SYSTÈME PRÊT. LE JOUEUR HUMAIN ACTUEL EST EN ROUGE.', 'highlight');
+
+                this.lastFrameTime = performance.now();
+                requestAnimationFrame((ts) => this.gameLoop(ts));
+            }
+
+            // Détermine dynamiquement si ce joueur est le joueur humain actif (donc en rouge)
+            isActiveHumanPlayer(player) {
+                const activeP = this.players[this.activePlayerIdx];
+                return Boolean(activeP && activeP.id === player.id && !player.isBot);
+            }
+
+            initPlayers() {
+                if (this.botTimeout) {
+                    clearTimeout(this.botTimeout);
+                    this.botTimeout = null;
+                }
+
+                this.players = [];
+                const activeConfigs = this.playerConfigs.filter(cfg => cfg.mode !== 'OFF');
+
+                // Sécurité : si tous les joueurs ont été désactivés, on réactive P1 en Humain
+                if (activeConfigs.length === 0) {
+                    this.playerConfigs[0].mode = 'HUMAN';
+                    activeConfigs.push(this.playerConfigs[0]);
+                }
+
+                activeConfigs.forEach((cfg, idx) => {
+                    const startCenter = this.board.getTileCenter(0);
+                    this.players.push({
+                        id: idx,
+                        slotId: cfg.id,
+                        name: cfg.name,
+                        role: cfg.role,
+                        sprite: cfg.sprite,
+                        isBot: cfg.mode === 'BOT',
+                        tile: 0,
+                        prevTileBeforeTurn: 0,
+                        turnsPlayed: 0,
+                        sleepTurns: 0,
+                        trapped: false,
+                        visX: startCenter.x,
+                        visY: startCenter.y,
+                        visZ: 0
+                    });
+                });
+
+                this.activePlayerIdx = 0;
+                this.turnNumber = 1;
+                this.state = 'STATE_IDLE';
+                this.diceValues = [6, 3];
+                this.particles = [];
+                this.floatingTexts = [];
+                this.renderDiceCanvas(6, 3, false);
+                this.updateUI();
+                this.checkIfCurrentTurnNeedsSkipOrBot();
+            }
+
+            populateSpecialInfoBox() {
+                const listEl = document.getElementById('specialTilesInfoList');
+                if (!listEl) return;
+                listEl.innerHTML = '';
+
+                CONFIG.SPECIAL_CATALOG.forEach(item => {
+                    const theme = CONFIG.THEMES[item.theme] || CONFIG.THEMES.NORMAL;
+                    const row = document.createElement('div');
+                    row.className = 'p-1.5 rounded border cursor-pointer transition-all flex items-center justify-between gap-2 hover:brightness-125';
+                    row.style.backgroundColor = theme.bg;
+                    row.style.borderColor = theme.border;
+
+                    const casesLabel = item.cases.length > 3
+                        ? `Cases ${item.cases.slice(0, 4).join(', ')}...`
+                        : `Case${item.cases.length > 1 ? 's' : ''} ${item.cases.join(', ')}`;
+
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="px-1.5 py-0.5 text-[10px] font-extrabold rounded border shrink-0"
+                                  style="background:${theme.badgeBg}; color:${theme.text}; border-color:${theme.border}">
+                                ${item.code}
+                            </span>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold truncate" style="color:${theme.text}">${item.title}</div>
+                                <div class="text-[10px] opacity-85 truncate" style="color:${theme.border}">${casesLabel}</div>
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/50 shrink-0" style="color:${theme.text}">
+                            ${item.shortRule}
+                        </span>
+                    `;
+
+                    const activateFocus = () => {
+                        this.highlightedGroupCases = item.cases;
+                        this.updateFocusInfoPanel(item.title, `CASE${item.cases.length > 1 ? 'S' : ''}: ${item.cases.join(', ')}`, item.desc, theme);
+                    };
+
+                    row.addEventListener('mouseenter', activateFocus);
+                    row.addEventListener('click', () => {
+                        this.audio.playLand();
+                        activateFocus();
+                    });
+                    row.addEventListener('mouseleave', () => {
+                        this.highlightedGroupCases = [];
+                    });
+
+                    listEl.appendChild(row);
+                });
+            }
+
+            updateFocusInfoPanel(title, badgeText, desc, theme) {
+                const box = document.getElementById('specialInfoFocusBox');
+                const titleEl = document.getElementById('focusTileTitle');
+                const numEl = document.getElementById('focusTileNumbers');
+                const descEl = document.getElementById('focusTileDesc');
+                if (!box || !titleEl) return;
+
+                box.style.borderColor = theme ? theme.border : '#38D838';
+                box.style.backgroundColor = theme ? theme.bg : '#050F05';
+                titleEl.style.color = theme ? theme.text : '#A8FFA8';
+                titleEl.textContent = title;
+                numEl.textContent = badgeText;
+                numEl.style.color = theme ? theme.text : '#38D838';
+                numEl.style.borderColor = theme ? theme.border : '#1E6B1E';
+                descEl.style.color = theme ? theme.text : '#38D838';
+                descEl.textContent = desc;
+            }
+
+            checkIfCurrentTurnNeedsSkipOrBot() {
+                if (this.state === 'STATE_GAME_OVER') return;
+                const p = this.players[this.activePlayerIdx];
+                if (!p) return;
+
+                if (p.trapped) {
+                    const trapName = p.tile === 31 ? 'PUITS (31)' : 'PRISON (52)';
+                    this.logSystem(`${p.name} est bloqué dans : ${trapName} (attend un autre joueur).`, 'warn');
+                    this.spawnFloatingText(p.visX, p.visY - 18, 'BLOQUÉ !', '#C084FC');
+                    this.state = 'STATE_NEXT_TURN';
+                    this.updateUI();
+                    this.botTimeout = setTimeout(() => this.advanceToNextPlayer(), 950);
+                    return;
+                }
+
+                if (p.sleepTurns > 0) {
+                    p.sleepTurns--;
+                    this.logSystem(`${p.name} se repose à l'Auberge (reste ${p.sleepTurns} tour(s)).`, 'warn');
+                    this.spawnFloatingText(p.visX, p.visY - 18, 'ZZZ...', '#FACC15');
+                    this.state = 'STATE_NEXT_TURN';
+                    this.updateUI();
+                    this.botTimeout = setTimeout(() => this.advanceToNextPlayer(), 950);
+                    return;
+                }
+
+                this.state = 'STATE_IDLE';
+                this.updateUI();
+
+                if (p.isBot) {
+                    this.botTimeout = setTimeout(() => {
+                        if (this.state === 'STATE_IDLE') {
+                            this.rollDice();
+                        }
+                    }, 700);
+                }
+            }
+
+            rollDice() {
+                if (this.state !== 'STATE_IDLE') return;
+                this.state = 'STATE_ROLLING';
+                this.updateUI();
+
+                const p = this.players[this.activePlayerIdx];
+                p.prevTileBeforeTurn = p.tile;
+
+                let ticks = 0;
+                const maxTicks = 10;
+                const rollInterval = setInterval(() => {
+                    ticks++;
+                    const tempD1 = Math.floor(Math.random() * 6) + 1;
+                    const tempD2 = Math.floor(Math.random() * 6) + 1;
+                    this.audio.playDiceRoll();
+                    this.renderDiceCanvas(tempD1, tempD2, true);
+
+                    if (ticks >= maxTicks) {
+                        clearInterval(rollInterval);
+                        const d1 = Math.floor(Math.random() * 6) + 1;
+                        const d2 = Math.floor(Math.random() * 6) + 1;
+                        this.diceValues = [d1, d2];
+                        const sum = d1 + d2;
+                        this.renderDiceCanvas(d1, d2, false);
+
+                        document.getElementById('uiDiceSum').textContent = sum < 10 ? '0' + sum : '' + sum;
+                        document.getElementById('uiDiceDetail').textContent = `Dés : [${d1}] + [${d2}]`;
+                        this.logSystem(`${p.name} lance [${d1}] + [${d2}] = ${sum}.`);
+
+                        this.executeTurnMove(p, d1, d2);
+                    }
+                }, 55);
+            }
+
+            executeTurnMove(player, d1, d2) {
+                this.state = 'STATE_MOVING';
+                this.updateUI();
+
+                const sum = d1 + d2;
+                const isFirstThrow = player.turnsPlayed === 0 && player.tile === 0;
+                player.turnsPlayed++;
+
+                if (isFirstThrow && sum === 9) {
+                    const isSixThree = (d1 === 6 && d2 === 3) || (d1 === 3 && d2 === 6);
+                    const specialTarget = isSixThree ? 26 : 53;
+                    this.audio.playBypass();
+                    this.logSystem(`RÈGLE DU 9 AU 1er TOUR (${d1}+${d2}) ! ${player.name} file directement à la case ${specialTarget} !`, 'highlight');
+                    this.spawnFloatingText(player.visX, player.visY - 20, `9 D'OUVERTURE -> ${specialTarget}!`, '#4ADE80');
+                    this.animateDirectWarp(player, specialTarget, () => {
+                        this.resolveLandingTile(player, sum);
+                    });
+                    return;
+                }
+
+                this.movePlayerBySteps(player, sum, () => {
+                    this.resolveLandingTile(player, sum);
+                });
+            }
+
+            movePlayerBySteps(player, stepsCount, onComplete) {
+                const pathSequence = [];
+                let current = player.tile;
+                let dir = 1;
+
+                for (let s = 0; s < stepsCount; s++) {
+                    current += dir;
+                    if (current > 63) {
+                        current = 62;
+                        dir = -1;
+                    }
+                    pathSequence.push(current);
+                }
+
+                const stepNext = (idx) => {
+                    if (idx >= pathSequence.length) {
+                        this.audio.playLand();
+                        onComplete();
+                        return;
+                    }
+
+                    const nextTileIdx = pathSequence[idx];
+                    this.audio.playJump(idx);
+                    this.animateSingleHop(player, nextTileIdx, 145, () => {
+                        player.tile = nextTileIdx;
+                        this.updateUI();
+                        stepNext(idx + 1);
+                    });
+                };
+
+                stepNext(0);
+            }
+
+            animateSingleHop(player, targetTileIdx, durationMs, onDone) {
+                const startX = player.visX;
+                const startY = player.visY;
+                const dest = this.board.getTileCenter(targetTileIdx);
+                const startTime = performance.now();
+
+                const tick = (now) => {
+                    const t = Math.min(1, (now - startTime) / durationMs);
+                    player.visX = startX + (dest.x - startX) * t;
+                    player.visY = startY + (dest.y - startY) * t;
+                    player.visZ = Math.sin(t * Math.PI) * 18;
+
+                    if (t < 1) {
+                        requestAnimationFrame(tick);
+                    } else {
+                        player.visX = dest.x;
+                        player.visY = dest.y;
+                        player.visZ = 0;
+                        onDone();
+                    }
+                };
+                requestAnimationFrame(tick);
+            }
+
+            animateDirectWarp(player, targetTileIdx, onDone) {
+                const startX = player.visX;
+                const startY = player.visY;
+                const dest = this.board.getTileCenter(targetTileIdx);
+                const durationMs = 420;
+                const startTime = performance.now();
+
+                const tick = (now) => {
+                    const t = Math.min(1, (now - startTime) / durationMs);
+                    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                    player.visX = startX + (dest.x - startX) * ease;
+                    player.visY = startY + (dest.y - startY) * ease;
+                    player.visZ = Math.sin(t * Math.PI) * 38;
+
+                    if (t < 1) {
+                        requestAnimationFrame(tick);
+                    } else {
+                        player.visX = dest.x;
+                        player.visY = dest.y;
+                        player.visZ = 0;
+                        player.tile = targetTileIdx;
+                        this.spawnParticles(dest.x, dest.y, '#A8FFA8', 14);
+                        this.updateUI();
+                        onDone();
+                    }
+                };
+                requestAnimationFrame(tick);
+            }
+
+            resolveLandingTile(player, diceSum) {
+                this.state = 'STATE_RESOLVE_TILE';
+                this.highlightTileIdx = player.tile;
+                this.highlightTimer = 60;
+                this.updateUI();
+
+                const tileNum = player.tile;
+                const spec = CONFIG.SPECIAL_TILES[tileNum];
+
+                if (tileNum === 63) {
+                    this.audio.playVictory();
+                    this.spawnParticles(player.visX, player.visY, '#FACC15', 30);
+                    this.spawnFloatingText(player.visX, player.visY - 22, 'VICTOIRE 63 !', '#FACC15');
+                    this.logSystem(`🏆 ${player.name} ATTEINT EXACTEMENT LA CASE 63 ET REMPORTE LA PARTIE !`, 'highlight');
+                    this.state = 'STATE_GAME_OVER';
+                    this.updateUI();
+                    this.showVictoryModal(player);
+                    return;
+                }
+
+                if (!spec || spec.type === 'START') {
+                    this.checkCollisionsAndFinish(player);
+                    return;
+                }
+
+                if (spec.type === 'OVC') {
+                    this.audio.playOverclock();
+                    this.spawnParticles(player.visX, player.visY, '#4ADE80', 16);
+                    this.spawnFloatingText(player.visX, player.visY - 20, `OIE ! +${diceSum}`, '#4ADE80');
+                    this.logSystem(`🦆 CASE DE L'OIE (${tileNum}) ! ${player.name} rebondit de +${diceSum} cases !`, 'highlight');
+
+                    setTimeout(() => {
+                        this.movePlayerBySteps(player, diceSum, () => {
+                            this.resolveLandingTile(player, diceSum);
+                        });
+                    }, 420);
+                    return;
+                }
+
+                if (tileNum === 6) {
+                    this.audio.playBypass();
+                    this.spawnFloatingText(player.visX, player.visY - 20, 'PONT -> CASE 12', '#38BDF8');
+                    this.logSystem(`🌉 LE PONT (Case 6) : ${player.name} traverse jusqu'à la case 12 !`, 'highlight');
+                    setTimeout(() => {
+                        this.animateDirectWarp(player, 12, () => {
+                            this.checkCollisionsAndFinish(player);
+                        });
+                    }, 420);
+                    return;
+                }
+
+                if (tileNum === 19) {
+                    this.audio.playTrap();
+                    player.sleepTurns = 2;
+                    this.spawnParticles(player.visX, player.visY, '#FACC15', 14);
+                    this.spawnFloatingText(player.visX, player.visY - 20, 'AUBERGE : 2 TOURS', '#FACC15');
+                    this.logSystem(`🛏️ L'AUBERGE (Case 19) : ${player.name} passe ses 2 prochains tours.`, 'warn');
+                    this.checkCollisionsAndFinish(player);
+                    return;
+                }
+
+                if (tileNum === 31 || tileNum === 52) {
+                    this.audio.playTrap();
+                    const label = tileNum === 31 ? 'LE PUITS' : 'LA PRISON';
+                    const previousPrisoner = this.players.find(other => other.id !== player.id && other.tile === tileNum && other.trapped);
+                    if (previousPrisoner) {
+                        previousPrisoner.trapped = false;
+                        this.logSystem(`🔓 ${player.name} libère ${previousPrisoner.name} de ${label} et prend sa place !`, 'highlight');
+                    } else {
+                        this.logSystem(`🔒 ${label} (Case ${tileNum}) : ${player.name} est bloqué en attendant un autre joueur !`, 'warn');
+                    }
+                    player.trapped = true;
+                    this.spawnParticles(player.visX, player.visY, '#C084FC', 16);
+                    this.spawnFloatingText(player.visX, player.visY - 20, `${label} !`, '#C084FC');
+                    this.checkCollisionsAndFinish(player);
+                    return;
+                }
+
+                if (tileNum === 42) {
+                    this.audio.playTrap();
+                    this.spawnFloatingText(player.visX, player.visY - 20, 'LABYRINTHE -> 30', '#C084FC');
+                    this.logSystem(`🌀 LABYRINTHE (Case 42) : ${player.name} s'égare et retourne à la case 30 !`, 'warn');
+                    setTimeout(() => {
+                        this.animateDirectWarp(player, 30, () => {
+                            this.checkCollisionsAndFinish(player);
+                        });
+                    }, 420);
+                    return;
+                }
+
+                if (tileNum === 58) {
+                    this.audio.playPurge();
+                    this.spawnParticles(player.visX, player.visY, '#F87171', 24);
+                    this.spawnFloatingText(player.visX, player.visY - 20, 'TÊTE DE MORT -> 0', '#F87171');
+                    this.logSystem(`💀 TÊTE DE MORT (Case 58) ! ${player.name} repart à la case Départ (0) !`, 'danger');
+                    setTimeout(() => {
+                        this.animateDirectWarp(player, 0, () => {
+                            this.checkCollisionsAndFinish(player);
+                        });
+                    }, 480);
+                    return;
+                }
+
+                this.checkCollisionsAndFinish(player);
+            }
+
+            checkCollisionsAndFinish(activePlayer) {
+                if (activePlayer.tile > 0) {
+                    const occupant = this.players.find(p => p.id !== activePlayer.id && p.tile === activePlayer.tile);
+                    if (occupant) {
+                        const returnTile = activePlayer.prevTileBeforeTurn;
+                        occupant.trapped = false;
+                        this.audio.playTrap();
+                        this.logSystem(`⇄ COLLISION CASE ${activePlayer.tile} ! ${occupant.name} est renvoyé à la case ${returnTile}.`, 'warn');
+                        this.spawnFloatingText(occupant.visX, occupant.visY - 22, `ÉCHANGE -> ${returnTile}`, '#FF9E7D');
+                        this.animateDirectWarp(occupant, returnTile, () => {
+                            this.advanceToNextPlayer();
+                        });
+                        return;
+                    }
+                }
+                this.advanceToNextPlayer();
+            }
+
+            advanceToNextPlayer() {
+                if (this.state === 'STATE_GAME_OVER') return;
+                this.activePlayerIdx = (this.activePlayerIdx + 1) % this.players.length;
+                if (this.activePlayerIdx === 0) {
+                    this.turnNumber++;
+                }
+                this.checkIfCurrentTurnNeedsSkipOrBot();
+            }
+
+            gameLoop(timestamp) {
+                this.updateEffects();
+                this.renderBoardCanvas(timestamp);
+                requestAnimationFrame((ts) => this.gameLoop(ts));
+            }
+
+            updateEffects() {
+                if (this.highlightTimer > 0) this.highlightTimer--;
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const pt = this.particles[i];
+                    pt.x += pt.vx;
+                    pt.y += pt.vy;
+                    pt.life--;
+                    if (pt.life <= 0) this.particles.splice(i, 1);
+                }
+
+                for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+                    const ft = this.floatingTexts[i];
+                    ft.y -= 0.45;
+                    ft.life--;
+                    if (ft.life <= 0) this.floatingTexts.splice(i, 1);
+                }
+            }
+
+            renderBoardCanvas(timestamp) {
+                const ctx = this.ctx;
+                ctx.fillStyle = CONFIG.COLORS.BG;
+                ctx.fillRect(0, 0, CONFIG.CANVAS_W, CONFIG.CANVAS_H);
+
+                this.drawMotherboardGrid(ctx);
+                this.drawCentralCourtyard(ctx, timestamp);
+                this.drawSpiralCircuitTraces(ctx);
+
+                for (let i = 0; i <= 63; i++) {
+                    this.drawExtrudedTile3D(ctx, this.board.tiles[i], timestamp);
+                }
+
+                this.drawAllPawns3D(ctx, timestamp);
+                this.drawParticlesAndFloatingTexts(ctx);
+            }
+
+            drawMotherboardGrid(ctx) {
+                ctx.strokeStyle = CONFIG.COLORS.DARK_LINE;
+                ctx.lineWidth = 1;
+                for (let x = 0; x < CONFIG.CANVAS_W; x += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, CONFIG.CANVAS_H);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < CONFIG.CANVAS_H; y += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(CONFIG.CANVAS_W, y);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#FF9E7D';
+                ctx.font = 'bold 11px "Courier New", monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText('↱ DÉPART : Suivez les numéros dans le sens des connecteurs jusqu\'au cœur du jardin (63).', 158, 518);
+            }
+
+            drawCentralCourtyard(ctx, timestamp) {
+                const cx = 415;
+                const cy = 246;
+                const boxW = 368;
+                const boxH = 206;
+                const boxX = cx - boxW / 2;
+                const boxY = cy - boxH / 2;
+
+                ctx.fillStyle = '#071607';
+                ctx.fillRect(boxX, boxY, boxW, boxH);
+                ctx.strokeStyle = '#1E6B1E';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+                ctx.fillStyle = '#38D838';
+                ctx.fillRect(boxX + 3, boxY + 3, 8, 2);
+                ctx.fillRect(boxX + 3, boxY + 3, 2, 8);
+                ctx.fillRect(boxX + boxW - 11, boxY + 3, 8, 2);
+                ctx.fillRect(boxX + boxW - 5, boxY + 3, 2, 8);
+
+                ctx.fillStyle = '#A8FFA8';
+                ctx.font = 'bold 18px "Courier New", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('LA BELLE AVENTURE', cx, boxY + 30);
+
+                ctx.fillStyle = '#4ADE80';
+                ctx.font = 'bold 11px "Courier New", monospace';
+                ctx.fillText('En route pour la case 63 !', cx, boxY + 48);
+
+                const sunPulse = Math.floor(timestamp / 400) % 2 === 0;
+                ctx.fillStyle = '#FACC15';
+                ctx.fillRect(cx - 8, boxY + 62, 12, 12);
+                if (sunPulse) {
+                    ctx.fillRect(cx - 12, boxY + 66, 3, 4);
+                    ctx.fillRect(cx + 7, boxY + 66, 3, 4);
+                    ctx.fillRect(cx - 4, boxY + 57, 4, 3);
+                }
+
+                ctx.fillStyle = '#0B3B1E';
+                ctx.beginPath();
+                ctx.ellipse(cx, boxY + 148, 95, 22, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#22C55E';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#082F49';
+                ctx.beginPath();
+                ctx.ellipse(cx + 32, boxY + 152, 38, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#38BDF8';
+                ctx.stroke();
+
+                SpriteRenderer.draw(ctx, 'GOOSE', cx - 28, boxY + 118, 4, '#FFFFFF', '#CBD5E1', '#050F05');
+                ctx.fillStyle = '#FF3344';
+                ctx.fillRect(cx - 24, boxY + 114, 10, 4);
+                ctx.fillRect(cx - 28, boxY + 118, 4, 4);
+
+                SpriteRenderer.draw(ctx, 'GOOSE', cx + 16, boxY + 128, 2, '#FEF08A', '#FACC15', '#050F05');
+
+                ctx.fillStyle = '#FF3344';
+                ctx.fillRect(cx - 72, boxY + 142, 4, 4);
+                ctx.fillRect(cx - 50, boxY + 150, 4, 4);
+                ctx.fillStyle = '#FACC15';
+                ctx.fillRect(cx - 60, boxY + 138, 4, 4);
+                ctx.fillRect(cx + 75, boxY + 142, 4, 4);
+
+                ctx.fillStyle = '#38D838';
+                ctx.font = 'italic 10px "Courier New", monospace';
+                ctx.fillText('— Le hasard fait bien les choses. —', cx, boxY + boxH - 12);
+            }
+
+            drawSpiralCircuitTraces(ctx) {
+                for (let i = 0; i < 63; i++) {
+                    const t1 = this.board.tiles[i];
+                    const t2 = this.board.tiles[i + 1];
+                    const c1 = this.board.getTileCenter(i);
+                    const c2 = this.board.getTileCenter(i + 1);
+
+                    ctx.strokeStyle = '#144214';
+                    ctx.lineWidth = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(c1.x, c1.y);
+                    ctx.lineTo(c2.x, c2.y);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = i === 0 ? '#FF6B35' : '#4ADE80';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(c1.x, c1.y);
+                    ctx.lineTo(c2.x, c2.y);
+                    ctx.stroke();
+
+                    const midX = Math.round(((t1.x + t1.w / 2) + (t2.x + t2.w / 2)) / 2);
+                    const midY = Math.round(((t1.y + t1.h / 2) + (t2.y + t2.h / 2)) / 2);
+                    ctx.fillStyle = '#A8FFA8';
+                    ctx.fillRect(midX - 2, midY - 2, 4, 4);
+                }
+            }
+
+            drawExtrudedTile3D(ctx, tile, timestamp) {
+                const { x, y, w, h, index, code, sprite, type, theme: themeKey } = tile;
+                const theme = CONFIG.THEMES[themeKey] || CONFIG.THEMES.NORMAL;
+                const isSpecial = type !== 'NORMAL';
+                const isRoot = index === 63;
+                const isHovered = this.hoveredTile && this.hoveredTile.index === index;
+                const isGroupHighlighted = this.highlightedGroupCases && this.highlightedGroupCases.includes(index);
+                const isHighlighted = (this.highlightTileIdx === index && this.highlightTimer > 0) || isGroupHighlighted;
+                const hasOccupant = this.players.some(p => p.tile === index && index > 0);
+
+                ctx.fillStyle = '#020602';
+                ctx.fillRect(x + 4, y + 4, w, h);
+
+                ctx.fillStyle = theme.edge;
+                ctx.fillRect(x + 2, y + 3, w, h);
+
+                ctx.fillStyle = (isHovered || isHighlighted) ? theme.edge : theme.bg;
+                ctx.fillRect(x, y, w, h);
+
+                ctx.strokeStyle = (isHovered || isHighlighted || hasOccupant) ? '#FFFFFF' : theme.border;
+                ctx.lineWidth = (isSpecial || isHovered || isHighlighted) ? 2 : 1;
+                ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+                if (index === 0) {
+                    ctx.fillStyle = theme.text;
+                    ctx.font = 'bold 11px "Courier New", monospace';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('00 // DÉPART', x + 8, y + 14);
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '9px "Courier New", monospace';
+                    ctx.fillText('ZONE STANDBY', x + 8, y + 27);
+                    return;
+                }
+
+                ctx.fillStyle = isSpecial ? theme.text : '#86EF86';
+                ctx.font = isSpecial ? 'bold 11px "Courier New", monospace' : 'bold 12px "Courier New", monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText('' + index, x + 5, y + 13);
+
+                if (isSpecial) {
+                    if (sprite) {
+                        const pulse = isRoot && Math.floor(timestamp / 350) % 2 === 0;
+                        const spriteX = type === 'OVC' ? x + w / 2 + 6 : x + w / 2;
+                        const spriteY = code && type !== 'OVC' ? y + h / 2 - 1 : y + h / 2 + 4;
+                        SpriteRenderer.draw(
+                            ctx,
+                            sprite,
+                            spriteX,
+                            spriteY,
+                            2,
+                            pulse ? '#FFFFFF' : theme.border,
+                            theme.text,
+                            '#050F05'
+                        );
+                    }
+
+                    if (code && type !== 'OVC') {
+                        ctx.fillStyle = theme.text;
+                        ctx.font = 'bold 8px "Courier New", monospace';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(code, x + w / 2, y + h - 4);
+                    }
+                }
+            }
+
+            getPawnSlotOffset(playerId, tileIndex) {
+                const occupants = this.players.filter(p => p.tile === tileIndex);
+                if (occupants.length <= 1) return { dx: 0, dy: 2 };
+                const idx = occupants.findIndex(p => p.id === playerId);
+                const offsets = [
+                    { dx: -10, dy: -4 },
+                    { dx: 10, dy: -4 },
+                    { dx: -10, dy: 8 },
+                    { dx: 10, dy: 8 }
+                ];
+                return offsets[idx % offsets.length];
+            }
+
+            drawAllPawns3D(ctx, timestamp) {
+                const sortedPlayers = [...this.players].sort((a, b) => {
+                    if (Math.abs(a.visY - b.visY) > 1) return a.visY - b.visY;
+                    return (this.isActiveHumanPlayer(a) ? 1 : 0) - (this.isActiveHumanPlayer(b) ? 1 : 0);
+                });
+
+                sortedPlayers.forEach(p => {
+                    const isMoving = Math.abs(p.visZ) > 0.2;
+                    const slot = isMoving ? { dx: 0, dy: 0 } : this.getPawnSlotOffset(p.id, p.tile);
+                    const groundX = Math.round(p.visX + slot.dx);
+                    const groundY = Math.round(p.visY + slot.dy);
+
+                    const isCurrent = this.players[this.activePlayerIdx]?.id === p.id && this.state !== 'STATE_GAME_OVER';
+                    const isRed = this.isActiveHumanPlayer(p);
+                    const primaryColor = isRed ? '#FF3344' : '#FFFFFF';
+                    const secondaryColor = isRed ? '#FF99A4' : '#CBD5E1';
+
+                    const idleBob = (isCurrent && this.state === 'STATE_IDLE') ? Math.abs(Math.sin(timestamp / 200)) * 5 : 0;
+                    const totalZ = p.visZ + idleBob + 5;
+
+                    const shadowRadiusX = Math.max(5, 11 - totalZ * 0.12);
+                    const shadowRadiusY = Math.max(3, 6 - totalZ * 0.06);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                    ctx.beginPath();
+                    ctx.ellipse(groundX, groundY + 5, shadowRadiusX, shadowRadiusY, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    if (isCurrent && this.state === 'STATE_IDLE') {
+                        ctx.strokeStyle = isRed ? '#FF3344' : '#FFFFFF';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.ellipse(groundX, groundY + 5, shadowRadiusX + 4, shadowRadiusY + 3, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+
+                    const spriteY = Math.round(groundY - totalZ);
+                    SpriteRenderer.draw(
+                        ctx,
+                        p.sprite,
+                        groundX,
+                        spriteY,
+                        2,
+                        primaryColor,
+                        secondaryColor,
+                        '#050F05'
+                    );
+
+                    const labelY = spriteY - 15;
+                    const tag = `P${(p.slotId !== undefined ? p.slotId : p.id) + 1}`;
+                    const tagW = 20;
+
+                    ctx.fillStyle = isRed ? '#990F1B' : '#0F172A';
+                    ctx.fillRect(Math.round(groundX - tagW / 2), labelY - 8, tagW, 10);
+                    ctx.strokeStyle = isRed ? '#FF5566' : '#FFFFFF';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(Math.round(groundX - tagW / 2) + 0.5, labelY - 7.5, tagW - 1, 9);
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 8px "Courier New", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(tag, groundX, labelY);
+                });
+            }
+
+            drawParticlesAndFloatingTexts(ctx) {
+                this.particles.forEach(pt => {
+                    ctx.fillStyle = pt.color;
+                    ctx.fillRect(Math.round(pt.x), Math.round(pt.y), pt.size, pt.size);
+                });
+
+                this.floatingTexts.forEach(ft => {
+                    ctx.fillStyle = '#050F05';
+                    ctx.font = 'bold 11px "Courier New", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(ft.text, Math.round(ft.x) + 1, Math.round(ft.y) + 1);
+
+                    ctx.fillStyle = ft.color;
+                    ctx.fillText(ft.text, Math.round(ft.x), Math.round(ft.y));
+                });
+            }
+
+            spawnParticles(x, y, color = '#A8FFA8', count = 12) {
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+                    const speed = 1 + Math.random() * 2.5;
+                    this.particles.push({
+                        x,
+                        y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed - 0.6,
+                        size: Math.random() > 0.5 ? 3 : 2,
+                        color,
+                        life: 22 + Math.floor(Math.random() * 14)
+                    });
+                }
+            }
+
+            spawnFloatingText(x, y, text, color = '#A8FFA8') {
+                this.floatingTexts.push({ x, y, text, color, life: 45 });
+            }
+
+            renderDiceCanvas(d1, d2, isRolling = false) {
+                const ctx = this.diceCtx;
+                ctx.fillStyle = '#050F05';
+                ctx.fillRect(0, 0, 150, 60);
+
+                const jitter1 = isRolling ? (Math.random() * 4 - 2) : 0;
+                const jitter2 = isRolling ? (Math.random() * 4 - 2) : 0;
+
+                this.drawSingleDie3D(ctx, 22 + jitter1, 8 + jitter2, d1, isRolling);
+                this.drawSingleDie3D(ctx, 84 - jitter2, 8 + jitter1, d2, isRolling);
+            }
+
+            drawSingleDie3D(ctx, x, y, val, isRolling) {
+                const size = 42;
+                ctx.fillStyle = '#020602';
+                ctx.fillRect(x + 4, y + 4, size, size);
+
+                ctx.fillStyle = '#144214';
+                ctx.fillRect(x + 2, y + 3, size, size);
+
+                ctx.fillStyle = isRolling ? '#154915' : '#0B280B';
+                ctx.fillRect(x, y, size, size);
+
+                ctx.strokeStyle = isRolling ? '#FFFFFF' : '#4ADE80';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+
+                const pipCoords = {
+                    1: [[21, 21]],
+                    2: [[11, 11], [31, 31]],
+                    3: [[11, 11], [21, 21], [31, 31]],
+                    4: [[11, 11], [31, 11], [11, 31], [31, 31]],
+                    5: [[11, 11], [31, 11], [21, 21], [11, 31], [31, 31]],
+                    6: [[11, 10], [31, 10], [11, 21], [31, 21], [11, 32], [31, 32]]
+                };
+
+                ctx.fillStyle = '#A8FFA8';
+                (pipCoords[val] || pipCoords[1]).forEach(([px, py]) => {
+                    ctx.fillRect(x + px - 3, y + py - 3, 6, 6);
+                });
+            }
+
+            updateUI() {
+                document.getElementById('uiTurnCounter').textContent =
+                    this.turnNumber < 10 ? '0' + this.turnNumber : '' + this.turnNumber;
+
+                const activeP = this.players[this.activePlayerIdx];
+                const activeNameEl = document.getElementById('uiActivePlayerName');
+                if (activeP) {
+                    const isActiveHuman = !activeP.isBot;
+                    activeNameEl.textContent = `${activeP.name} (${activeP.isBot ? 'BOT' : 'HUMAIN'})`;
+                    activeNameEl.style.color = isActiveHuman ? '#FF4455' : '#FFFFFF';
+                }
+
+                const badge = document.getElementById('uiGameStateBadge');
+                const btnRoll = document.getElementById('btnRollDice');
+                const canHumanRoll = this.state === 'STATE_IDLE' && activeP && !activeP.isBot;
+
+                btnRoll.disabled = !canHumanRoll;
+                if (this.state === 'STATE_GAME_OVER') {
+                    badge.textContent = 'TERMINÉ';
+                } else if (activeP && activeP.isBot) {
+                    badge.textContent = 'TOUR BOT...';
+                } else if (this.state === 'STATE_IDLE') {
+                    badge.textContent = `À ${activeP ? activeP.name : 'VOUS'} !`;
+                } else {
+                    badge.textContent = 'EN COURS';
+                }
+
+                const container = document.getElementById('playersListContainer');
+                container.innerHTML = '';
+
+                this.players.forEach((p, idx) => {
+                    const isCurrent = idx === this.activePlayerIdx && this.state !== 'STATE_GAME_OVER';
+                    const isRed = this.isActiveHumanPlayer(p);
+
+                    const card = document.createElement('div');
+                    const borderColor = isRed
+                        ? 'border-[#FF4455] shadow-[0_0_12px_rgba(255,51,68,0.45)]'
+                        : (isCurrent ? 'border-white shadow-[0_0_10px_rgba(255,255,255,0.35)]' : 'border-[#1E6B1E]');
+
+                    card.className = `p-2 rounded border transition-all flex items-center justify-between bg-[#050F05] ${borderColor}`;
+
+                    let statusText = 'EN COURSE';
+                    let statusBadgeClass = 'bg-[#0D2B0D] text-[#38D838] border-[#1E6B1E]';
+                    if (p.tile === 63) {
+                        statusText = 'VICTOIRE!';
+                        statusBadgeClass = 'bg-[#0D2B0D] text-[#A8FFA8] border-[#38D838] font-extrabold';
+                    } else if (p.trapped) {
+                        statusText = p.tile === 31 ? 'AU PUITS' : 'EN PRISON';
+                        statusBadgeClass = 'bg-[#3B0764] text-[#F3E8FF] border-[#C084FC]';
+                    } else if (p.sleepTurns > 0) {
+                        statusText = `AUBERGE (${p.sleepTurns}T)`;
+                        statusBadgeClass = 'bg-[#422006] text-[#FEF08A] border-[#FACC15]';
+                    }
+
+                    const progressPct = Math.round((p.tile / 63) * 100);
+                    const badgeStyle = isRed
+                        ? 'bg-[#FF3344] text-white border-[#FF99A4]'
+                        : 'bg-white text-[#050F05] border-gray-300';
+                    const barColor = isRed ? 'bg-[#FF3344]' : 'bg-white';
+                    const nameColor = isRed ? 'text-[#FF6677]' : 'text-white';
+                    const slotNum = (p.slotId !== undefined ? p.slotId : p.id) + 1;
+
+                    card.innerHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-6 h-6 rounded border flex items-center justify-center text-xs font-extrabold shrink-0 ${badgeStyle}">
+                                P${slotNum}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-bold ${nameColor} truncate">${p.name}</span>
+                                    <span class="text-[9px] px-1 rounded ${isRed ? 'bg-[#450A0F] text-[#FECACA] border-[#FF4455]' : 'bg-[#0D2B0D] text-[#A8FFA8] border-[#1E6B1E]'} border">
+                                        ${p.isBot ? 'BOT' : (isRed ? 'ACTIF (ROUGE)' : 'HUMAIN')}
+                                    </span>
+                                </div>
+                                <div class="w-28 sm:w-32 h-1.5 bg-[#0A1F0A] border border-[#1E6B1E] rounded overflow-hidden mt-1">
+                                    <div class="h-full ${barColor}" style="width: ${progressPct}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right flex flex-col items-end gap-1">
+                            <span class="text-[10px] px-1.5 py-0.5 rounded border ${statusBadgeClass}">
+                                ${statusText}
+                            </span>
+                            <span class="text-[11px] font-bold text-[#A8FFA8]">
+                                C.${p.tile}/63
+                            </span>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            logSystem(msg, type = 'normal') {
+                const c = document.getElementById('sysLogContainer');
+                if (!c) return;
+                const div = document.createElement('div');
+                div.className = 'leading-snug';
+
+                let colorClass = 'text-[#38D838]';
+                if (type === 'highlight') colorClass = 'text-[#A8FFA8] font-bold';
+                else if (type === 'warn') colorClass = 'text-[#FACC15]';
+                else if (type === 'danger') colorClass = 'text-[#F87171] font-bold';
+
+                div.className += ` ${colorClass}`;
+                const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                div.textContent = `[${timeStr}] ${msg}`;
+                c.appendChild(div);
+                c.scrollTop = c.scrollHeight;
+            }
+
+            showVictoryModal(winnerPlayer) {
+                const modal = document.getElementById('modalVictory');
+                const title = document.getElementById('victoryTitle');
+                const subtitle = document.getElementById('victorySubtitle');
+
+                title.textContent = `${winnerPlayer.name} A GAGNÉ !`;
+                subtitle.textContent = `${winnerPlayer.name} a atteint le cœur du jardin (case 63) avec brio et remporte la partie du Jardin des Oies !`;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+
+            isAnyModalOpen() {
+                const mConfig = document.getElementById('modalConfig');
+                const mSynth = document.getElementById('modalSynth');
+                const mVictory = document.getElementById('modalVictory');
+                return (
+                    (mConfig && !mConfig.classList.contains('hidden')) ||
+                    (mSynth && !mSynth.classList.contains('hidden')) ||
+                    (mVictory && !mVictory.classList.contains('hidden'))
+                );
+            }
+
+            bindEvents() {
+                const btnRoll = document.getElementById('btnRollDice');
+                btnRoll.addEventListener('click', () => {
+                    if (this.state === 'STATE_IDLE') {
+                        const p = this.players[this.activePlayerIdx];
+                        if (p && !p.isBot) {
+                            this.rollDice();
+                        }
+                    }
+                });
+
+                window.addEventListener('keydown', (e) => {
+                    const activeTag = document.activeElement ? document.activeElement.tagName : '';
+                    if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') {
+                        return;
+                    }
+                    if (this.isAnyModalOpen()) {
+                        return;
+                    }
+
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        if (this.state === 'STATE_IDLE') {
+                            const p = this.players[this.activePlayerIdx];
+                            if (p && !p.isBot) {
+                                this.rollDice();
+                            }
+                        }
+                    }
+                });
+
+                // Canvas Mouse Interactions
+                this.canvas.addEventListener('mousemove', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const scaleX = CONFIG.CANVAS_W / rect.width;
+                    const scaleY = CONFIG.CANVAS_H / rect.height;
+                    const cx = (e.clientX - rect.left) * scaleX;
+                    const cy = (e.clientY - rect.top) * scaleY;
+
+                    const found = this.board.getTileAtCanvasPos(cx, cy);
+                    this.hoveredTile = found;
+
+                    const tooltip = document.getElementById('uiTileTooltip');
+                    if (found) {
+                        tooltip.textContent = `Case ${found.index} : ${found.name} — ${found.desc}`;
+                    } else {
+                        tooltip.textContent = 'Survolez ou touchez une case pour inspecter ses spécificités';
+                    }
+                });
+
+                this.canvas.addEventListener('mouseleave', () => {
+                    this.hoveredTile = null;
+                });
+
+                this.canvas.addEventListener('click', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const scaleX = CONFIG.CANVAS_W / rect.width;
+                    const scaleY = CONFIG.CANVAS_H / rect.height;
+                    const cx = (e.clientX - rect.left) * scaleX;
+                    const cy = (e.clientY - rect.top) * scaleY;
+
+                    const found = this.board.getTileAtCanvasPos(cx, cy);
+                    if (found) {
+                        this.audio.playLand();
+                        this.highlightTileIdx = found.index;
+                        this.highlightTimer = 90;
+                        const theme = CONFIG.THEMES[found.theme] || CONFIG.THEMES.NORMAL;
+                        this.updateFocusInfoPanel(found.name, `CASE ${found.index}`, found.desc, theme);
+                    }
+                });
+
+                // Modale Config
+                const modalConfig = document.getElementById('modalConfig');
+                const closeConfigModal = () => {
+                    modalConfig.classList.remove('flex');
+                    modalConfig.classList.add('hidden');
+                };
+
+                document.getElementById('btnOpenConfig').addEventListener('click', () => {
+                    this.buildConfigPlayersForm();
+                    modalConfig.classList.remove('hidden');
+                    modalConfig.classList.add('flex');
+                });
+                document.getElementById('btnCloseConfig').addEventListener('click', closeConfigModal);
+                document.getElementById('btnCancelConfig').addEventListener('click', closeConfigModal);
+
+                document.getElementById('btnApplyConfig').addEventListener('click', () => {
+                    this.playerConfigs.forEach((cfg, idx) => {
+                        const nameInput = document.getElementById(`cfgName_${idx}`);
+                        const modeSelect = document.getElementById(`cfgMode_${idx}`);
+
+                        if (nameInput) {
+                            const trimmed = nameInput.value.trim();
+                            cfg.name = trimmed.length > 0 ? trimmed.slice(0, 16) : `JOUEUR_${idx + 1}`;
+                        }
+                        if (modeSelect) {
+                            cfg.mode = modeSelect.value;
+                        }
+                    });
+
+                    // Garantir qu'au moins un joueur est actif
+                    const hasAtLeastOneActive = this.playerConfigs.some(cfg => cfg.mode !== 'OFF');
+                    if (!hasAtLeastOneActive) {
+                        this.playerConfigs[0].mode = 'HUMAN';
+                    }
+
+                    closeConfigModal();
+                    this.initPlayers();
+                    const summary = this.players.map(p => `${p.name} [${p.isBot ? 'BOT' : 'HUMAIN'}]`).join(', ');
+                    this.logSystem(`Configuration appliquée : ${summary}.`, 'highlight');
+                });
+
+                // Modale Audio & Synth
+                const modalSynth = document.getElementById('modalSynth');
+                document.getElementById('btnOpenSynth').addEventListener('click', () => {
+                    modalSynth.classList.remove('hidden');
+                    modalSynth.classList.add('flex');
+                });
+                document.getElementById('btnCloseSynth').addEventListener('click', () => {
+                    modalSynth.classList.remove('flex');
+                    modalSynth.classList.add('hidden');
+                });
+
+                // Sliders de volume Musique & SFX
+                const sliderMusic = document.getElementById('sliderMusicVol');
+                const uiMusicVal = document.getElementById('uiMusicVolVal');
+                sliderMusic.addEventListener('input', (e) => {
+                    const pct = parseInt(e.target.value, 10);
+                    uiMusicVal.textContent = `${pct}%`;
+                    this.audio.setMusicVolume(pct / 100);
+                });
+
+                const sliderSfx = document.getElementById('sliderSfxVol');
+                const uiSfxVal = document.getElementById('uiSfxVolVal');
+                sliderSfx.addEventListener('input', (e) => {
+                    const pct = parseInt(e.target.value, 10);
+                    uiSfxVal.textContent = `${pct}%`;
+                    this.audio.setSfxVolume(pct / 100);
+                });
+                sliderSfx.addEventListener('change', () => {
+                    this.audio.playLand();
+                });
+
+                modalSynth.querySelectorAll('button[data-sfx]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const sfx = btn.getAttribute('data-sfx');
+                        if (sfx === 'roll') this.audio.playDiceRoll();
+                        else if (sfx === 'jump') this.audio.playJump(0);
+                        else if (sfx === 'land') this.audio.playLand();
+                        else if (sfx === 'overclock') this.audio.playOverclock();
+                        else if (sfx === 'bypass') this.audio.playBypass();
+                        else if (sfx === 'trap') this.audio.playTrap();
+                        else if (sfx === 'purge') this.audio.playPurge();
+                        else if (sfx === 'victory') this.audio.playVictory();
+                    });
+                });
+
+                // Bouton Audio Mute / Unmute
+                const btnMute = document.getElementById('btnToggleMute');
+                btnMute.addEventListener('click', () => {
+                    const isMuted = this.audio.toggleMute();
+                    btnMute.textContent = isMuted ? '[🔇 AUDIO: OFF]' : '[🔊 AUDIO: ON]';
+                    if (!isMuted) {
+                        this.audio.startBGM();
+                    }
+                });
+
+                // Bouton Reset
+                document.getElementById('btnResetGame').addEventListener('click', () => {
+                    this.initPlayers();
+                    this.logSystem('Partie réinitialisée par l\'utilisateur.', 'warn');
+                });
+
+                // Bouton Rejouer Victoire
+                document.getElementById('btnVictoryReplay').addEventListener('click', () => {
+                    const mVictory = document.getElementById('modalVictory');
+                    mVictory.classList.remove('flex');
+                    mVictory.classList.add('hidden');
+                    this.initPlayers();
+                    this.logSystem('Nouvelle partie lancée depuis l\'écran de victoire !', 'highlight');
+                });
+
+                // Vider les logs
+                document.getElementById('btnClearLog').addEventListener('click', () => {
+                    document.getElementById('sysLogContainer').innerHTML = '';
+                });
+            }
+
+            buildConfigPlayersForm() {
+                const container = document.getElementById('configPlayersForm');
+                container.innerHTML = '';
+
+                this.playerConfigs.forEach((cfg, idx) => {
+                    const row = document.createElement('div');
+                    row.className = 'p-2.5 rounded bg-[#050F05] border border-[#1E6B1E] flex items-center justify-between gap-3';
+
+                    const roleBadge = `<span class="text-[11px] font-bold text-[#A8FFA8]">EMPLACEMENT P${idx + 1}</span>`;
+
+                    row.innerHTML = `
+                        <div class="flex flex-col gap-1 flex-1">
+                            ${roleBadge}
+                            <input
+                                type="text"
+                                id="cfgName_${idx}"
+                                maxlength="16"
+                                placeholder="Nom du joueur..."
+                                class="bg-[#081C08] border border-[#1E6B1E] text-[#A8FFA8] px-2.5 py-1 rounded text-xs w-full focus:outline-none focus:border-[#38D838]"
+                            />
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] text-[#38D838] font-bold uppercase">Contrôle</span>
+                            <select
+                                id="cfgMode_${idx}"
+                                class="bg-[#081C08] border border-[#1E6B1E] text-[#A8FFA8] px-2.5 py-1 rounded text-xs font-bold focus:outline-none focus:border-[#38D838]"
+                            >
+                                <option value="HUMAN" ${cfg.mode === 'HUMAN' ? 'selected' : ''}>Humain (Local)</option>
+                                <option value="BOT" ${cfg.mode === 'BOT' ? 'selected' : ''}>Bot (IA)</option>
+                                <option value="OFF" ${cfg.mode === 'OFF' ? 'selected' : ''}>Désactivé</option>
+                            </select>
+                        </div>
+                    `;
+                    container.appendChild(row);
+
+                    const inputEl = row.querySelector(`#cfgName_${idx}`);
+                    if (inputEl) {
+                        inputEl.value = cfg.name;
+                    }
+                });
+
+                const mode0 = document.getElementById('cfgMode_0');
+                if (mode0) {
+                    mode0.addEventListener('change', () => {
+                        if (mode0.value === 'OFF') {
+                            mode0.value = 'HUMAN';
+                        }
+                    });
+                }
+            }
+        }
+
+        window.onload = function () {
+            window.gameInstance = new GameEngine();
+        };
+    </script>
+</body>
+</html>
